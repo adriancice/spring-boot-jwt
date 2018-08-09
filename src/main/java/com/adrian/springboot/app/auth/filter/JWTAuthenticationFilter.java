@@ -2,6 +2,9 @@ package com.adrian.springboot.app.auth.filter;
 
 import com.adrian.springboot.app.auth.service.JWTService;
 import com.adrian.springboot.app.auth.service.JWTServiceImpl;
+import com.adrian.springboot.app.models.entity.Usuario;
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
@@ -21,22 +24,18 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-
 public class JWTAuthenticationFilter extends UsernamePasswordAuthenticationFilter {
 
 	private AuthenticationManager authenticationManager;
 	private JWTService jwtService;
 
-	public JWTAuthenticationFilter(AuthenticationManager authenticationManager) {
+	public JWTAuthenticationFilter(AuthenticationManager authenticationManager, JWTService jwtService) {
 		this.authenticationManager = authenticationManager;
 		setRequiresAuthenticationRequestMatcher(new AntPathRequestMatcher("/api/login", "POST"));
+
+		this.jwtService = jwtService;
 	}
 
-	/**
-	 * Sobreescribimos este metodo que se encarga de realizar la autenticacion
-	 */
 	@Override
 	public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response)
 			throws AuthenticationException {
@@ -44,17 +43,29 @@ public class JWTAuthenticationFilter extends UsernamePasswordAuthenticationFilte
 		String username = obtainUsername(request);
 		String password = obtainPassword(request);
 
-		if (username == null) {
-			username = "";
-		}
-
-		if (password == null) {
-			password = "";
-		}
-
 		if (username != null && password != null) {
 			logger.info("Username desde request parameter (form-data): " + username);
 			logger.info("Password desde request parameter (form-data): " + password);
+
+		} else {
+			Usuario user = null;
+			try {
+
+				user = new ObjectMapper().readValue(request.getInputStream(), Usuario.class);
+
+				username = user.getUsername();
+				password = user.getPassword();
+
+				logger.info("Username desde request InputStream (raw): " + username);
+				logger.info("Password desde request InputStream (raw): " + password);
+
+			} catch (JsonParseException e) {
+				e.printStackTrace();
+			} catch (JsonMappingException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 
 		username = username.trim();
@@ -81,7 +92,19 @@ public class JWTAuthenticationFilter extends UsernamePasswordAuthenticationFilte
 		response.getWriter().write(new ObjectMapper().writeValueAsString(body));
 		response.setStatus(200);
 		response.setContentType("application/json");
+	}
 
+	@Override
+	protected void unsuccessfulAuthentication(HttpServletRequest request, HttpServletResponse response,
+			AuthenticationException failed) throws IOException, ServletException {
+
+		Map<String, Object> body = new HashMap<String, Object>();
+		body.put("mensaje", "Error de autenticación: username o password incorrecto!");
+		body.put("error", failed.getMessage());
+
+		response.getWriter().write(new ObjectMapper().writeValueAsString(body));
+		response.setStatus(401);
+		response.setContentType("application/json");
 	}
 
 }

@@ -40,7 +40,7 @@ public class JWTServiceImpl implements JWTService {
 		claims.put("authorities", new ObjectMapper().writeValueAsString(roles));
 
 		String token = Jwts.builder().setClaims(claims).setSubject(username)
-				.signWith(SignatureAlgorithm.HS512, SECRET.getBytes()).setIssuedAt(new Date())
+				.signWith(SignatureAlgorithm.HS256, SECRET.getBytes()).setIssuedAt(new Date())
 				.setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_DATE)).compact();
 
 		return token;
